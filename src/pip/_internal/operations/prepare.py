@@ -452,6 +452,35 @@ class RequirementPreparer(object):
             logger.debug('%s does not support range requests', url)
             return None
 
+    def download_linked_requirement(self, req):
+        # type: (InstallRequirement) -> Optional[File]
+        assert req.link
+        link = req.link
+        hashes = self._get_linked_req_hashes(req)
+        if link.url not in self._downloaded:
+            try:
+                local_file = unpack_url(
+                    link, req.source_dir, self._download,
+                    self.download_dir, hashes,
+                )
+            except NetworkConnectionError as exc:
+                raise InstallationError(
+                    'Could not install requirement {} because of HTTP '
+                    'error {} for URL {}'.format(req, exc, link)
+                )
+        else:
+            file_path, content_type = self._downloaded[link.url]
+            if hashes:
+                hashes.check_against_path(file_path)
+            local_file = File(file_path, content_type)
+
+        # For use in later processing,
+        # preserve the file path on the requirement.
+        if local_file:
+            req.local_file_path = local_file.path
+
+        return local_file
+
     def prepare_linked_requirement(self, req, parallel_builds=False):
         # type: (InstallRequirement, bool) -> Distribution
         """Prepare a requirement to be obtained from req.link."""
@@ -493,32 +522,10 @@ class RequirementPreparer(object):
 
     def _prepare_linked_requirement(self, req, parallel_builds):
         # type: (InstallRequirement, bool) -> Distribution
-        assert req.link
-        link = req.link
 
         self._ensure_link_req_src_dir(req, parallel_builds)
-        hashes = self._get_linked_req_hashes(req)
-        if link.url not in self._downloaded:
-            try:
-                local_file = unpack_url(
-                    link, req.source_dir, self._download,
-                    self.download_dir, hashes,
-                )
-            except NetworkConnectionError as exc:
-                raise InstallationError(
-                    'Could not install requirement {} because of HTTP '
-                    'error {} for URL {}'.format(req, exc, link)
-                )
-        else:
-            file_path, content_type = self._downloaded[link.url]
-            if hashes:
-                hashes.check_against_path(file_path)
-            local_file = File(file_path, content_type)
 
-        # For use in later processing,
-        # preserve the file path on the requirement.
-        if local_file:
-            req.local_file_path = local_file.path
+        self.download_linked_requirement(req)
 
         dist = _get_prepared_distribution(
             req, self.req_tracker, self.finder, self.build_isolation,

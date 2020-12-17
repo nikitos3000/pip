@@ -127,9 +127,18 @@ class Resolver(BaseResolver):
             error = self.factory.get_installation_error(e)
             six.raise_from(error, e)
 
+        must_prepare = (
+            not self.ignore_requires_python and
+            not self.ignore_dependencies
+        )
+
         req_set = RequirementSet(check_supported_wheels=check_supported_wheels)
         for candidate in self._result.mapping.values():
-            ireq = candidate.get_install_requirement()
+            if must_prepare:
+                ireq = candidate.get_install_requirement()
+            else:
+                ireq = candidate._ireq  # call unprepared
+
             if ireq is None:
                 continue
 

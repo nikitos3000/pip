@@ -138,6 +138,7 @@ class DownloadCommand(RequirementCommand):
         for req in requirement_set.requirements.values():
             if req.satisfied_by is None:
                 assert req.name is not None
+                preparer.download_linked_requirement(req)
                 preparer.save_linked_requirement(req)
                 downloaded.append(req.name)
         if downloaded:
